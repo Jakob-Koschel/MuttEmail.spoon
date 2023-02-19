@@ -36,15 +36,12 @@ local function updateCount(count)
   end
 end
 
-local function onClick()
-  checkEmailUnread()
-end
-
 local function checkEmailUnread()
   -- TODO: check how many emails are unread
   local task = hs.task.new('/bin/sh',
   function(err, stdOut, stdErr)
-    new_mail_count = tonumber(stdOut:gsub("%s+", ""))
+    numStr = stdOut:gsub("%s+", "")
+    new_mail_count = tonumber(numStr)
     updateCount(new_mail_count)
     task = nil
   end,
@@ -55,6 +52,10 @@ local function checkEmailUnread()
   env["PATH"] = path
   task:setEnvironment(env)
   task:start()
+end
+
+local function onClick()
+  checkEmailUnread()
 end
 
 -- timer callback, fetch response
@@ -91,10 +92,6 @@ function obj:start(config)
   end)
   self.watcher:start()
 
-  hs.urlevent.bind("MuttWizardCheckEmailUnread", function(eventName, params)
-    checkEmailUnread()
-  end)
-
   return self
 end
 
@@ -109,7 +106,9 @@ end
 
 
 function obj:init()
-  -- currently no init required
+  -- save function on object to call from command line:
+  -- hs -c "spoon.MuttWizard.checkEmailUnread()"
+  self.checkEmailUnread = checkEmailUnread
 end
 
 return obj
