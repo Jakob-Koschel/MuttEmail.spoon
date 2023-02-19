@@ -8,7 +8,7 @@ local obj = {}
 obj.name = "MuttWizard"
 obj.version = "1.0"
 obj.author = "https://github.com/Jakob-Koschel"
-obj.homepage = "https://github.com/Jakob-Koschel/MuttEmail.spoon"
+obj.homepage = "https://github.com/Jakob-Koschel/MuttWizard.spoon"
 obj.license = "MIT - https://opensource.org/licenses/MIT"
 
 
