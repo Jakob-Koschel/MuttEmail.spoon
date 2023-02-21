@@ -45,7 +45,7 @@ local function checkEmailUnread()
     updateCount(new_mail_count)
     task = nil
   end,
-  { '-c', 'notmuch search tag:inbox AND tag:unread | wc -l'})
+  { '-c', "notmuch search tag:inbox AND tag:unread AND folder:'/INBOX$/' | wc -l"})
   local env = task:environment()
   local path = env["PATH"]
   path = path..":/opt/homebrew/bin:/usr/local/bin"
