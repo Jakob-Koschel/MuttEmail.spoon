@@ -10,15 +10,13 @@ obj.version = "1.0"
 obj.author = "https://github.com/Jakob-Koschel"
 obj.homepage = "https://github.com/Jakob-Koschel/MuttWizard.spoon"
 obj.license = "MIT - https://opensource.org/licenses/MIT"
+obj.count = 0
+obj.auth_required = false
 
-
-function refreshEmail(whatToDoAfter)
+local function executeCommand(command, callbackFn)
   local task = hs.task.new('/bin/sh',
-  function(err, stdOut, stdErr)
-    whatToDoAfter(err, stdOut, stdErr)
-    task = nil
-  end,
-  { '-c', 'mw -Y'})
+  callbackFn,
+  { '-c', command})
   local env = task:environment()
   local path = env["PATH"]
   path = path..":/opt/homebrew/bin:/usr/local/bin"
@@ -27,45 +25,86 @@ function refreshEmail(whatToDoAfter)
   task:start()
 end
 
+
+function refreshEmail(whatToDoAfter)
+  executeCommand('mw -Y',
+  function(err, stdOut, stdErr)
+    whatToDoAfter(err, stdOut, stdErr)
+    task = nil
+  end)
+end
+
 -- update the menu bar
-local function updateCount(count)
+local function updateTitle()
+  count = obj.count
+  title = ''
   if count > 0 then
-    obj.menu:setTitle('📫 '..count)
+    title = '📫 '..count
   else
-    obj.menu:setTitle('📪')
+    title = '📪'
   end
+  if obj.auth_required then
+    title = title .. ' ⚠️ '
+  end
+  obj.menu:setTitle(title)
 end
 
 local function checkEmailUnread()
   -- TODO: check how many emails are unread
-  local task = hs.task.new('/bin/sh',
+  executeCommand("notmuch search tag:inbox AND tag:unread AND folder:'/INBOX$/' | wc -l",
   function(err, stdOut, stdErr)
     numStr = stdOut:gsub("%s+", "")
-    new_mail_count = tonumber(numStr)
-    updateCount(new_mail_count)
+    obj.count = tonumber(numStr)
+    updateTitle()
     task = nil
-  end,
-  { '-c', "notmuch search tag:inbox AND tag:unread AND folder:'/INBOX$/' | wc -l"})
-  local env = task:environment()
-  local path = env["PATH"]
-  path = path..":/opt/homebrew/bin:/usr/local/bin"
-  env["PATH"] = path
-  task:setEnvironment(env)
-  task:start()
+  end)
+end
+
+local function triggerPinentryUnlock()
+  -- trigger authenticating
+  executeCommand("echo 'test' | gpg --clearsign",
+  function(err, stdOut, stdErr)
+    if err == 0 then
+      obj.auth_required = false
+    else
+      obj.auth_required = true
+    end
+    updateTitle()
+    task = nil
+  end)
+end
+
+local function checkIfPinentryUnlockRequired()
+  executeCommand("echo 'test' | gpg --pinentry-mode=cancel --clearsign",
+  function(err, stdOut, stdErr)
+    if err == 0 then
+      obj.auth_required = false
+    elseif obj.auto_auth then
+      triggerPinentryUnlock()
+    else
+      obj.auth_required = true
+    end
+    task = nil
+  end)
 end
 
 local function onClick()
   checkEmailUnread()
+  if obj.auth_required then
+    triggerPinentryUnlock()
+  end
 end
 
 -- timer callback, fetch response
 local function onInterval()
+  checkIfPinentryUnlockRequired()
   refreshEmail(checkEmailUnread)
 end
 
 
 function obj:start(config)
   local interval = config.interval or 60
+  self.auto_auth = config.auto_auth or false
 
   -- create menubar (or restore it)
   if self.menu then
