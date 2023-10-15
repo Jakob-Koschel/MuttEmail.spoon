@@ -79,13 +79,47 @@ local function checkIfPinentryUnlockRequired()
   function(err, stdOut, stdErr)
     if err == 0 then
       obj.auth_required = false
-    elseif obj.auto_auth then
-      triggerPinentryUnlock()
+    -- elseif obj.auto_auth then
+    --   triggerPinentryUnlock()
     else
       obj.auth_required = true
     end
     task = nil
   end)
+end
+
+local function getDuration(startTime)
+  local p = "%a+ (%a+) *(%d+) (%d+):(%d+):(%d+) (%d+)"
+  startTime = 'Sun Jun  4 16:04:09 2023'
+  local month, day, hour, min, sec, year = startTime:match(p)
+  local MON = {Jan=1, Feb=2, Mar=3, Apr=4, May=5, Jun=6, Jul=7, Aug=8, Sep=9, Oct=10, Nov=11, Dec=12}
+  local month=MON[month]
+  local startSeconds = os.time({day=day, month=month, year=year, hour=hour, min=min, sec=sec, isdst=false})
+  local currentSeconds = os.time()
+
+  local t = os.date("*t", now)
+  if t.isdst then
+    startSeconds =  startSeconds - (60 * 60)
+  end
+
+  return currentSeconds - startSeconds
+end
+
+local function checkIfMbsyncStuck()
+  executeCommand("pgrep -x mbsync",
+    function(err, stdOut, stdErr)
+      for pid in stdOut:gmatch("(%d+)\n") do
+        executeCommand("ps -o lstart= -p " .. pid,
+          function(err, stdOut, stdErr)
+            local duration = getDuration(stdOut:gsub("\n$", ""))
+
+            local durationHours = duration / 3600
+            if durationHours >= 1 then
+              executeCommand("killall mbsync")
+            end
+          end)
+      end
+    end)
 end
 
 local function onClick()
@@ -97,6 +131,7 @@ end
 
 -- timer callback, fetch response
 local function onInterval()
+  checkIfMbsyncStuck()
   checkIfPinentryUnlockRequired()
   refreshEmail(checkEmailUnread)
 end
